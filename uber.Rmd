@@ -1,0 +1,273 @@
+---
+title: "Proyecto uber"
+author: "Gustavo Barbieri"
+date: "2023-06-21"
+output: pdf_document
+---
+
+## Proyecto de análisis de datos sobre Uber
+
+#### Pasos
+
+###### Liberías 
+Las librerías que han de ser utilizadas, si no las tiene instaladas recuerde que se instalan solo una vez, y luego solo tiene que llamarlas, para instalar use install.packages("nombre del paquete)
+```{r message=FALSE, warning=F} 
+library(ggplot2) #para gráficos
+library(ggthemes) #complemento para ggplot2
+library(lubridate) #para el manejo de fechas
+library(dplyr) #para manipulación de los datos
+library(tidyr) #para ordenar datos
+library(DT) #para crear tablas con formatos 
+library(scales) #ayuda a las escalas gráficas.
+```
+
+Para iniciar el análisis, en primer lugar necesitamos el set de datos, que lo hemos de obtener desde [Datos UBER](https://data-flair.training/blogs/r-data-science-project-uber-data-analysis/). En esa web tomé los parámetros y guías correspondiente para mi aprendizaje y pasar este proyecto.
+
+Una vez bajados los datos al disco, debemos indicar a R cual ha de ser el directorio de trabajo. 
+Para ellos usamos setwd y la ruta(). 
+Para que sea más facil especificar la ruta del directorio, usamos file.choose, que abre una ventana para buscar un archivo y devuelve por consola la dirección. Así solo debemos copiar y pegar esa dirección y no tener que escribir cada una de las carpetas. En el código tiene una # para evitar que abra cada vez que usamos Knit para realizar una presentación de este markdown.
+
+```{r}
+#file.choose()
+setwd("C:\\Users\\gabar\\OneDrive\\Documentos\\R ejercicios\\Data flair training\\Uber-dataset")
+
+```
+
+Se crea un vector con colores a utilizar, esto es optativo, al igual que los colores. En sí, R tiene colores base por default que si no se especifica lo contrario usa los que vienen por default.
+```{r}
+colors = c ( "#CC1011", "#665555", "#05a399", "#cfcaca", "#f5e840", "#0683c9", "#e075b0")
+```
+
+#### Lectura de los datos.
+Pasaremos a leer los datos en R, los datos están almacenados en diferentes archivos, uno por mes desde abril de 2014 a septiembre 2014, todos en formato csv, archivo separado por ",". Usaremos el comando read.csv(). Luego unificaremos todos los datos en un solo objeto llamado "data_2014" usando rbind()
+```{r}
+apr_data <- read.csv("uber-raw-data-apr14.csv")
+may_data <- read.csv("uber-raw-data-may14.csv")
+jun_data <- read.csv("uber-raw-data-jun14.csv")
+jul_data <- read.csv("uber-raw-data-jul14.csv")
+aug_data <- read.csv("uber-raw-data-aug14.csv")
+sep_data <- read.csv("uber-raw-data-sep14.csv")
+
+data_2014 <- rbind(apr_data,may_data, jun_data, jul_data, aug_data, sep_data)
+```
+
+Una vez que tenemos los datos unificados en un solo objeto, es ideal realizar str() para corroborar que tipo de datos tenemos en cada variable. Así podemos observar que la variabla Data.Time si bien almacena valroes que son fechas, para R, en éstos momentos, son caracteres. Por lo tanto hay que formatearlos a fecha. La fecha que maneja R está en un formato YYYY MM DD H M S, si ingresamos la fecha en otro formato, hay que indicarle a R en que formato está, se utiliza format(as.POSIXct.., fomat). En nuestra base los datos están en formato m d Y H M S, que quiere decir mes, día, año(en 4 dígitos) hora minutos segundos. Formateamos:
+```{r}
+str(data_2014)
+data_2014$Date.Time <- as.POSIXct(data_2014$Date.Time, format = "%m/%d/%Y %H:%M:%S")
+```
+Una buena práctica, más cuando uno está empezando, es corroborar que esté bien formateado y realizar un nuevo str() 
+```{r}
+str(data_2014)
+```
+
+
+Seguimos con la variable fecha, vamos a separar de la variable los datos de la hora, creamos una variable "time".  Primero colocamos el nombre del set de datos seguido del signo "$" y el nombre de la nueva variable "Time", así creamos una nueva variable en el set de datos, asignamos con el formato fecha, y agregamos al final el formato de H M S.
+Luego creamos variables para los días, meses ( se le agrega label=T, si observa tiene las 3 letras del mes, si no use usa, queda en formato numérico)
+```{r}
+data_2014$Time <- format(as.POSIXct(data_2014$Date.Time, format = "%m/%d/%Y %H:%M:%S"), format="%H:%M:%S")
+data_2014$Date.Time <- ymd_hms(data_2014$Date.Time)
+data_2014$day <- factor(day(data_2014$Date.Time))
+data_2014$month <- factor(month(data_2014$Date.Time, label = TRUE))
+data_2014$year <- factor(year(data_2014$Date.Time))
+data_2014$dayofweek <- factor(wday(data_2014$Date.Time, label = TRUE))
+```
+
+Creamos también las variables horas minutos y segundos.
+```{r}
+data_2014$hour <- factor(hour(hms(data_2014$Time)))
+data_2014$minute <- factor(minute(hms(data_2014$Time)))
+data_2014$second <- factor(second(hms(data_2014$Time)))
+```
+
+### Análisis
+Ahora iremos trabajando, ordenando y visualizando que nos muestran los datos. Entre las diferentes funciones que tiene R, podemos agrupar, y realizar cálculos, gráficos, etc. En este caso agruparemos por hora, para ver en que horas tenemos mayores o menores viajes. La función para agrupar es group_by(nombre de la variable a agrupar). Seguido del agrupamiento, le indicamos que queremos que haga con eso. Aquí queremos que cuente cuantos viajes se realizan según el horario. Usamos el pipe o %>%. En summarize es la función para realizar el cálculo donde cuenta la cantidad de viajes por hora, según el agrupamiento. Donde dice "total" se le puede poner el nombre que elijamos seguido del =n(). Luego con la librería DT, usamos datatable() con el objeto creado, en este caso "hour_data", y nos crea una bonita tabla donde podemos analizar y filtrar los datos.
+
+```{r}
+hour_data <- data_2014 %>%
+           group_by(hour) %>%
+           summarize(Total = n()) 
+datatable(hour_data)
+```
+
+Graficamos con la librería ggplot, aquí primero se coloca de donde vienen los datos, del objeto que hemos creado con el agrupamiento, "hour_data", luego ggplot tiene capas para su construcción, en este caso "aes", donde indicamos month para el eje X y Total para el eje Y. Los valores que están en el objeto antes mencionado. También vale aclarar el uso del signo "+" luego de cada asignación. Hasta ahora le dijimos a ggplot que datos tiene que usar pero aun no le dijimos que tipo de gráfico. Para ellos usamos "geom_" y el nombre del gráfico. En este caso "bar" que es gráfico de barras. Con fill y color indicamos de que color irá el relleno de las barras y el borde de las mismas. ggtitle / theme y scale_y_continuous podría no estar, pero embellecen el gráfico, siempre es bueno tener un título de lo que estamos viendo, para ellos usamos ggtitle("") el nombre entre comillas. Con theme se puede sacar la leyenda o mover de posición etc, aquí se saca con none. Y scale_y_continuous trabaja sobre el eje y, al indicar en labels que sea comma, los números del eje y se muestran como 300,000.
+
+```{r}
+ggplot(hour_data, aes(hour, Total)) + 
+  geom_bar( stat = "identity", fill = "steelblue", color = "red") +
+  ggtitle("Viajes según hora del día acumulado") +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = comma)
+
+```
+
+Ahora veremos los datos por mes y por hora. Cuando se coloca por ejemplo dplyr:: es porque en R hay algunas librerías o funciones que se llaman igual, entonces de esa manera se le especifica a R que queremos usar summarise de la librería dplyr
+
+
+```{r message=F}
+month_hour <- data_2014 %>%
+  group_by(month, hour) %>%
+  dplyr::summarize(Total = n())
+datatable(month_hour) 
+
+```
+En este gráfico las barras nos muestran las horas del día, y la cantidad de viajes que se hacen en ese horario, a las 2 am es donde menos viajes se realizan, y a las 6pm o 18hs donde mayores viajes se realizan. Estos datos son acumulados en los meses analizados, pero cuando en la aes (estética) del grafico le indicamos a R que use los datos de las horas, y el Total, también le indicamos que en fill, en las barras, agregue los meses. Observen que en este caso es conveniente usar la leyenda a un costado para indicar en los colores los meses.
+```{r}
+ggplot(month_hour, aes(hour, Total, fill = month)) + 
+  geom_bar( stat = "identity") +
+  ggtitle("Viajes por hora y mes") +
+  scale_y_continuous(labels = comma)
+```
+\n
+Ahora analicemos la cantidad de viajes por día. Téngase presente que en el set de datos, cada mes tiene el día 1, y no el día 1/4, entonces cuando agrupemos, en este caso contaremos todos los días 1 de los 6 meses.  
+```{r, message=F}
+day_group <- data_2014 %>%
+  group_by(day) %>%
+  dplyr::summarize(Total = n()) 
+datatable(day_group)
+
+```
+
+Graficamos y observamos que el día 30 es el día de mayor cantidad de viajes, y baja abruptamente el día 31, claro, tenemos 3 meses que no tienen día 31 y no se contabiliza. Parecería gracioso o evidente, pero en el análisis de datos, tenemos que tener siempre estos puntos, y aclararlos, quizás algo obvio para alguien que tiene que tomar una decisión se lo pase por alto porque solo vió una barra sin la aclaración correspondiente.
+
+```{r}
+ggplot(day_group, aes(day, Total)) + 
+  geom_bar( stat = "identity", fill = "steelblue") +
+  ggtitle("Viajes por día") +
+  theme(legend.position = "none") +
+  scale_y_continuous(labels = comma)
+
+```
+\n
+Ahora veamos los viajes por día del mes de manera individual. Agruparemos por mes y por día y obtendremos la cantidad total de viajes por día. Luego su correspondiente tabla
+```{r, message= F}
+day_month_group <- data_2014 %>%
+         group_by(month, day) %>%
+             dplyr::summarize(Total = n())
+datatable(day_month_group)
+```
+
+Si observamos bien, este gráfico y el anterior son similares, o casi, por lo menos nos muestra los días del 1 al 31, pero una salvedad muy interesante, dentro de las barras separamos por meses, mostrar todas las barras de los 6 meses sería inviable con gráfico de barras, quizás una línea de tiempo. También se ha usado los 6 colores que hemos ingresado al vector colors al inicio con la función scale_fill_manueal(values="nombre del vector donde almacenamos los colores")
+```{r}
+ggplot(day_month_group, aes(day, Total, fill = month)) + 
+  geom_bar( stat = "identity") +
+  ggtitle("Trips by Day and Month") +
+  scale_y_continuous(labels = comma) +
+  scale_fill_manual(values = colors)
+```
+\n
+Veamos los viajes que se realizaron por mes. El agrupamiento es por mes, solo obtendremos 6 datos. Es decir, suma los viajes en el mes. 
+```{r, message=F}
+month_group <- data_2014 %>%
+  group_by(month) %>%
+  dplyr::summarize(Total = n()) 
+datatable(month_group)
+```
+Graficamos, y observamos que el mayor mes en cantidad de viajes es septiembre. Aquí si no usamos fill =month los datos se muestran igual, lo que está realizando es mejorar la visualización indicando que el relleno de las barras sean de colores. y esos colores los use según indicamos en scale_fill_manual. Si no usamos esto, R dice me piden que rellene las barras con los diferentes meses, entonces usa los que R tiene por default.
+```{r}
+ggplot(month_group, aes(month, Total, fill = month))+
+  geom_bar( stat = "identity")+
+  ggtitle("Trips by month")+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels = comma) +
+  scale_fill_manual(values = colors)
+```
+\n
+Con los colores que R usa por default.
+```{r}
+ggplot(month_group, aes(month, Total, fill = month))+
+  geom_bar( stat = "identity")+
+  ggtitle("Trips by month")+
+  theme(legend.position = "none")+
+  scale_y_continuous(labels = comma) 
+```
+\n
+Viajes por el nombmre del día de la semana, aquí me genera un error que aún no resolví. Lo agrego porque cuando tienes un error, y no sabes como resolverlo, una buena alternativa para adminsitrar tu tiempo y conocimiento es, primero intentar por tus medios para aprender y mejorar, pero sino lo resuelves, hay una gran comunidad dispuesta a ayudar. Mientras tanto, sigue haciendo presentaciones y mejora tu portfolio.
+```{r, message=F}
+month_weekday <- data_2014 %>% 
+  group_by(month, dayofweek) %>% 
+  summarise(Total = n())
+```
+
+
+```{r}
+ggplot(month_weekday, aes (month, Total, fill = dayofweek ))+
+  geom_bar(stat = "identity", position = "dodge")+
+  ggtitle("Viajes por día y mes")+
+  scale_y_continuous(labels = comma)+
+  scale_fill_manual(values = colors)
+
+```
+
+
+Analizaremos desde aquí los viajes según las bases. Un gráfico muy simple, con 2 líneas de código, en este caso no agrupamos, simplemente le decimos a ggplot que haga su magia. Indicamos el set de datos, en aes cual es la variable que tiene que usar, y R se encarga su contar la cantidad de viajes por Base. Luego le indicamos que use barras para graficar. Sin nada entre paréntesis.
+```{r}
+ggplot(data_2014, aes(Base))+
+  geom_bar()
+```
+
+\n
+Vamos a enriquecerlo un poco mas, agremos color, en este caso un darkblue que se colocó en geom_bar, eso porque no tienen en cuenta los datos y variables, solo colorea las barras. 
+Observamos que la mayor cantidad de viajes fueron desde la base B02617 y la de menor cantidad de viajes fue la B02512
+
+```{r}
+ggplot(data_2014, aes(Base))+
+  geom_bar(fill="darkblue")+
+  scale_y_continuous(labels = comma)+
+  ggtitle("Trips by Bases")
+```
+Ahora agreguemos fill en la estética, entonces los colores los pinta según la variable indicada. Aparece algo nuevo hasta aquí, que es la position "dodge". como en estética usamos los datos de la Base, y le decimos que en fill es decir en las barras, agrupe o diferencie por meses, sino aclaramos la position dodge, lo realiza por default todo apilado, con dodge los coloca uno al lado del otro separando los meses pero en el eje x sigue estando separado por base. Veamos sin dodge y luego con dodge. 
+```{r}
+ggplot(data_2014, aes(Base, fill = month)) + 
+ geom_bar() +
+ scale_y_continuous(labels = comma) +
+ ggtitle("Trips by Bases and Month") +
+ scale_fill_manual(values = colors)
+```
+
+```{r}
+ggplot(data_2014, aes(Base, fill = month)) + 
+ geom_bar(position = "dodge") +
+ scale_y_continuous(labels = comma) +
+ ggtitle("Trips by Bases and Month") +
+ scale_fill_manual(values = colors)
+
+```
+
+Haremos un mapa de calor por hora:
+```{r, message=FALSE}
+day_and_hour <- data_2014 %>% 
+  group_by(day, hour) %>% 
+  summarise(Total = n())
+datatable(day_and_hour)
+```
+Graficamos el mapa de calor. En el eje x irán los días y en el eje y las horas. En fill colocamos el total. El geom para el mapa de calor es tile. Cuando colocamos color =white, es para las líneas que seaparan los cuadrados en el mapa 
+```{r}
+ggplot(day_and_hour, aes(day, hour, fill=Total))+
+  geom_tile(color = "white")+
+  ggtitle("Mapa de calor por día y hora")
+```
+ 
+ Ahora veremos el codigo y un grafico usando las ubicaciones brindada en la base según la longitud y latitud. 
+Sacaremos los mínimos y maáximos tanto de longitud como latitud 
+```{r}
+min_lat <- min(data_2014$Lat, na.rm = T)
+max_lat <- max(data_2014$Lat, na.rm = T)
+min_long <- min(data_2014$Lon, na.rm = T)
+max_long <- max(data_2014$Lon, na.rm = T)
+min_lat
+max_lat
+min_long
+max_long
+```
+Graficamos:
+```{r}
+ggplot(data_2014, aes(x=Lon, y=Lat)) +
+  geom_point(size=1, color = "blue") +
+     scale_x_continuous(limits=c(min_long, max_long)) +
+      scale_y_continuous(limits=c(min_lat, max_lat)) +
+        theme_map() +
+           ggtitle("Viajes en UBER en Nueva York (apr-sep 2014)")
+```
+ 
+ 
